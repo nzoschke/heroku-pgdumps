@@ -5,8 +5,7 @@ module Heroku::Command
       if list.size > 0
         list.each do |pgdump|
           space  = ' ' * [(18 - pgdump['name'].size),1].max
-          state = pgdump['state'] == 'finished' ? '' : "(#{pgdump['state']})"
-          display "#{pgdump['name']}" + space + "#{pgdump['size']} #{state}"
+          display "#{pgdump['name']}" + space + "#{pgdump['size']} #{pgdump['state']}"
         end
       else
         display "#{app} has no pgdumps."
@@ -17,12 +16,29 @@ module Heroku::Command
     def capture
       pgdump = heroku.pgdump_capture(app)
       display("Capturing pgdump #{pgdump['name']} of #{app}'s #{sprintf("%0.1f", pgdump['size'].to_f/(1024*1024))}MB database")
+      monitor_progress(pgdump['name'])
+    end
 
+    def restore
+      pgdump_name = args.first.strip.downcase rescue 'latest'
+      pgdump = heroku.pgdump_restore(app, pgdump_name)
+      display("Restoring #{sprintf("%0.1f", pgdump['size'].to_f/(1024*1024))}MB pgdump #{pgdump_name} to #{app}")
+      monitor_progress(pgdump_name)
+    end
+
+    def url
+      pgdump_name = args.first.strip.downcase rescue 'latest'
+      display heroku.pgdump_url(app, pgdump_name)
+    end
+
+    protected
+
+    def monitor_progress(pgdump_name)
       last_progress = nil
       loop do
         sleep 1
 
-        info = heroku.pgdump_info(app, pgdump['name'])
+        info = heroku.pgdump_info(app, pgdump_name)
         progress = info['progress'].last
 
         if progress[0] != last_progress
@@ -44,32 +60,6 @@ module Heroku::Command
 
       display "\nDone."
     end
-
-    def restore
-      timeout = extract_option('--timeout', 30).to_i
-      pgdump_name = args.first.strip.downcase rescue 'latest'
-      pgdump = heroku.pgdump_restore(app, pgdump_name)
-      display("Restoring #{pgdump['size']} byte pgdump...", false)
-      begin
-         Timeout::timeout(timeout) do
-           loop do
-             break if heroku.pgdump_complete?(app, pgdump['name'])
-             display(".", false)
-             sleep 1
-           end
-         end
-         display " done"
-       rescue Timeout::Error
-         display "Timed Out! Check heroku info for status updates."
-       end
-    end
-
-    def url
-      pgdump_name = args.first.strip.downcase rescue 'latest'
-      display heroku.pgdump_url(app, pgdump_name)
-    end
-
-    protected
 
     def display_progress(progress)
         display(sprintf("\r%-8s  ...  %s", progress[0].capitalize, progress[1]), false)
