@@ -17,21 +17,31 @@ module Heroku::Command
     def capture
       pgdump = heroku.pgdump_capture(app)
       display("Capturing pgdump #{pgdump['name']} of #{app}'s #{sprintf("%0.1f", pgdump['size'].to_f/(1024*1024))}MB database")
+
       last_progress = nil
       loop do
         sleep 1
+
         info = heroku.pgdump_info(app, pgdump['name'])
         progress = info['progress'].last
+
         if progress[0] != last_progress
-          if info['progress'].length > 1
-            display_progress(info['progress'][-2])
-            display(' '*20 + "\n")
+          show = false
+          info['progress'].each do |row|
+            next if row == progress
+            show = true if last_progress == row[0] or last_progress.nil?
+            if show
+              display_progress(row)
+              display(' '*20 + "\n")
+            end
           end
           last_progress = progress[0]
         end
+
         display_progress(progress)
         break if info['state'] == 'complete'
       end
+
       display "\nDone."
     end
 
