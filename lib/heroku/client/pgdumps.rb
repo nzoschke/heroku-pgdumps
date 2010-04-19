@@ -16,7 +16,7 @@ class Heroku::Client
   end
 
   def pgdump_complete?(app_name, pgdump_name)
-    pgdump_info(app_name, pgdump_name)['state'] == 'finished'
+    ['finished', 'error'].include? pgdump_info(app_name, pgdump_name)['state']
   end
 
   def pgdump_url(app_name, pgdump_name)
