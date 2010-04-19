@@ -15,23 +15,24 @@ module Heroku::Command
     alias :index :list
 
     def capture
-      timeout = extract_option('--timeout', 30).to_i
       pgdump = heroku.pgdump_capture(app)
-      display("Capturing a pgdump of #{app}'s #{pgdump['size']} byte database...", false)
-      begin
-        Timeout::timeout(timeout) do
-          loop do
-            break if heroku.pgdump_complete?(app, pgdump['name'])
-            display(".", false)
-            sleep 1
+      display("Capturing pgdump #{pgdump['name']} of #{app}'s #{sprintf("%0.1f", pgdump['size'].to_f/(1024*1024))}MB database")
+      last_progress = nil
+      loop do
+        sleep 1
+        info = heroku.pgdump_info(app, pgdump['name'])
+        progress = info['progress'].last
+        if progress[0] != last_progress
+          if info['progress'].length > 1
+            display_progress(info['progress'][-2])
+            display(' '*20 + "\n")
           end
+          last_progress = progress[0]
         end
-        display " done"
-        pgdump = heroku.pgdump_info(app, pgdump['name'])
-        display "The compressed pgdump is #{pgdump['size']} bytes and named #{pgdump['name']}"
-      rescue Timeout::Error
-        display "Timed Out! Check heroku info for status updates."
+        display_progress(progress)
+        break if info['state'] == 'complete'
       end
+      display "\nDone."
     end
 
     def restore
@@ -59,6 +60,11 @@ module Heroku::Command
     end
 
     protected
+
+    def display_progress(progress)
+        display(sprintf("\r%-8s  ...  %s", progress[0].capitalize, progress[1]), false)
+    end
+
       Help.group 'Pgdumps' do |group|
         group.command 'pgdumps',                      'list pgdumps for the app'
         group.command 'pgdumps:capture',              'capture a dump of the app\'s postgres database'
