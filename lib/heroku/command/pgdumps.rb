@@ -35,12 +35,13 @@ module Heroku::Command
 
     def monitor_progress(pgdump_name)
       last_progress = nil
+      spinner = 0
       loop do
         sleep 1
 
         info = heroku.pgdump_info(app, pgdump_name)
         progress = info['progress'].last
-		  next unless progress
+        next unless progress
 
         if progress[0] != last_progress
           show = false
@@ -55,15 +56,29 @@ module Heroku::Command
           last_progress = progress[0]
         end
 
-        display_progress(progress)
-        break if info['state'] == 'complete'
+        if info['state'] == 'complete'
+          display_progress(progress)
+          break
+        end
+
+        spinner = display_progress(progress, spinner)
       end
 
       display "\nDone."
     end
 
-    def display_progress(progress)
-        display(sprintf("\r\e[2K%-8s  ...  %s", progress[0].capitalize, progress[1]), false)
+    def display_progress(progress, spinner=nil)
+      display(sprintf("\r\e[2K%-8s  ...  %s", progress[0].capitalize, progress[1]), false)
+
+      if spinner
+        spinner = (spinner + 1) % spinner_chars.length
+        display(" " + spinner_chars[spinner], false)
+        spinner
+      end
+    end
+
+    def spinner_chars
+      %w(/ - \\ |)
     end
 
       Help.group 'Pgdumps' do |group|
