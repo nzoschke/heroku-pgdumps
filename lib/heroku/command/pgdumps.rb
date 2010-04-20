@@ -17,6 +17,8 @@ module Heroku::Command
       pgdump = heroku.pgdump_capture(app)
       display("Capturing pgdump #{pgdump['name']} of #{app}'s #{sprintf("%0.1f", pgdump['size'].to_f/(1024*1024))}MB database")
       monitor_progress(pgdump['name'])
+    rescue PgdumpError
+      raise CommandFailed, "Internal server error"
     end
 
     def restore
@@ -24,6 +26,8 @@ module Heroku::Command
       pgdump = heroku.pgdump_restore(app, name)
       display("Restoring #{sprintf("%0.1f", pgdump['size'].to_f/(1024*1024))}MB pgdump #{pgdump['name']} to #{app}")
       monitor_progress(pgdump['name'])
+    rescue PgdumpError
+      raise CommandFailed, "Internal server error - your existing database has not been affected"
     end
 
     def url
@@ -33,6 +37,8 @@ module Heroku::Command
 
     protected
 
+    class PgdumpError < RuntimeError; end
+
     def monitor_progress(pgdump_name)
       last_progress = nil
       spinner = 0
@@ -41,9 +47,8 @@ module Heroku::Command
 
         info = heroku.pgdump_info(app, pgdump_name)
         progress = info['progress'].last
-        next unless progress
 
-        if progress[0] != last_progress
+        if progress and progress[0] != last_progress
           show = false
           info['progress'].each do |row|
             next if row == progress
@@ -61,13 +66,21 @@ module Heroku::Command
           break
         end
 
+        if info['state'] == 'error'
+          display_progress(progress)
+          display("\n")
+          raise PgdumpError
+        end
+
         spinner = display_progress(progress, spinner)
       end
 
-      display "\nDone."
+      display "\nComplete."
     end
 
     def display_progress(progress, spinner=nil)
+      return spinner unless progress
+
       display(sprintf("\r\e[2K%-8s  ...  %s", progress[0].capitalize, progress[1]), false)
 
       if spinner
