@@ -49,7 +49,7 @@ module Heroku::Command
             show = true if last_progress == row[0] or last_progress.nil?
             if show
               display_progress(row)
-              display(' '*20 + "\n")
+              display("\n")
             end
           end
           last_progress = progress[0]
@@ -63,7 +63,7 @@ module Heroku::Command
     end
 
     def display_progress(progress)
-        display(sprintf("\r%-8s  ...  %s", progress[0].capitalize, progress[1]), false)
+        display(sprintf("\r\e[2K%-8s  ...  %s", progress[0].capitalize, progress[1]), false)
     end
 
       Help.group 'Pgdumps' do |group|
