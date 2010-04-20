@@ -20,14 +20,14 @@ module Heroku::Command
     end
 
     def restore
-      pgdump_name = args.first.strip.downcase rescue 'latest'
-      pgdump = heroku.pgdump_restore(app, pgdump_name)
-      display("Restoring #{sprintf("%0.1f", pgdump['size'].to_f/(1024*1024))}MB pgdump #{pgdump_name} to #{app}")
-      monitor_progress(pgdump_name)
+      name = args.first.strip rescue 'latest'
+      pgdump = heroku.pgdump_restore(app, name)
+      display("Restoring #{sprintf("%0.1f", pgdump['size'].to_f/(1024*1024))}MB pgdump #{pgdump['name']} to #{app}")
+      monitor_progress(pgdump['name'])
     end
 
     def url
-      pgdump_name = args.first.strip.downcase rescue 'latest'
+      pgdump_name = args.first.strip rescue 'latest'
       display heroku.pgdump_url(app, pgdump_name)
     end
 
@@ -40,6 +40,7 @@ module Heroku::Command
 
         info = heroku.pgdump_info(app, pgdump_name)
         progress = info['progress'].last
+		  next unless progress
 
         if progress[0] != last_progress
           show = false
