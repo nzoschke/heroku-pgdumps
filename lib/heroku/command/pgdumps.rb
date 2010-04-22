@@ -2,14 +2,12 @@ module Heroku::Command
   class Pgdumps < BaseWithApp
     def list
       list = heroku.pgdumps(app)
-      if list.size > 0
-        list.each do |pgdump|
-          space  = ' ' * [(18 - pgdump['name'].size),1].max
-          display "#{pgdump['name']}" + space + "#{pgdump['size']} #{pgdump['state']}"
-        end
-      else
-        display "#{app} has no pgdumps."
+      rows = [['Pgdump', 'Size', 'Status']]
+      list.each do |pgdump|
+        rows << [pgdump['name'], human_size(pgdump['size']), pgdump['state']]
       end
+      print_table(rows, :header => true)
+      display "#{app} has no pgdumps." if list.size == 0
     end
     alias :index :list
 
@@ -61,7 +59,7 @@ module Heroku::Command
           last_progress = progress[0]
         end
 
-        if info['state'] == 'complete'
+        if ['captured', 'restored'].member? info['state']
           display_progress(progress)
           break
         end
@@ -94,12 +92,40 @@ module Heroku::Command
       %w(/ - \\ |)
     end
 
-      Help.group 'Pgdumps' do |group|
-        group.command 'pgdumps',                      'list pgdumps for the app'
-        group.command 'pgdumps:capture',              'capture a dump of the app\'s postgres database'
-        group.command 'pgdumps:restore <name>',       'restore the app\'s postgres database from a pgdump'
-        group.command 'pgdumps:restore <url>',        'restore the app\'s postgres database from an arbitrary URL'
-        group.command 'pgdumps:url [<name>]',         'get a URL for a pgdump'
-      end
+    def human_size(bytes)
+       units = %w{B KB MB GB TB}
+       bytes = bytes.to_i
+       return '0B' unless bytes > 0
+       e = (Math.log(bytes)/Math.log(1024)).floor
+       s = "%.2f" % (bytes.to_f / 1024**e)
+       s.sub(/\.?0*$/, units[e])
+    end
+
+    def print_table(rows, options={})
+      widths = [0] * rows.first.size
+      rows.each { |row|
+        row.each_with_index { |cell, i|
+          widths[i] = [widths[i], cell.to_s.size].max
+        }
+      }
+
+      rows.insert(1, widths.collect {|w| '-' * w}) if options[:header]
+
+      rows.each { |row|
+        r = ""
+        row.each_with_index { |cell, i|
+          r += cell.to_s + ' ' * (widths[i] - cell.to_s.size + 3)
+        }
+        display r
+      }
+    end
+
+    Help.group 'Pgdumps' do |group|
+      group.command 'pgdumps',                      'list pgdumps for the app'
+      group.command 'pgdumps:capture',              'capture a dump of the app\'s postgres database'
+      group.command 'pgdumps:restore <name>',       'restore the app\'s postgres database from a pgdump'
+      group.command 'pgdumps:restore <url>',        'restore the app\'s postgres database from an arbitrary URL'
+      group.command 'pgdumps:url [<name>]',         'get a URL for a pgdump'
+    end
   end
 end
